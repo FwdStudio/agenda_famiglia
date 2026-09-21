@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16213A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Famiglia">
+<title>Agenda famiglia</title>
+<style>
+:root{
+  --bg:#F4F6F1; --surface:#FFFFFF; --ink:#16213A; --muted:#5F6B7E; --line:#DDE2DA;
+  --accent:#16213A; --on-accent:#FFFFFF; --danger:#C2412F; --scrim:rgba(22,33,58,.45);
+  --font:ui-rounded,"SF Pro Rounded","Nunito","Varela Round",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0F1626;--surface:#19233A;--ink:#EEF1F6;--muted:#9AA6BA;--line:#2A3650;--accent:#F2B705;--on-accent:#16213A;--danger:#FF8A78;--scrim:rgba(0,0,0,.6);}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html{background:var(--bg)}
+body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);line-height:1.4;
+  padding:env(safe-area-inset-top,0px) 0 0;}
+#app{max-width:520px;margin:0 auto;padding:20px 18px 150px}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.hd{margin:8px 0 18px}
+h1{font-size:clamp(2.6rem,13vw,3.7rem);line-height:1;letter-spacing:-.035em;font-weight:800;margin:0}
+.sub{margin:8px 0 0;color:var(--muted);font-size:1.05rem;text-transform:none}
+h2{font-size:1.15rem;font-weight:800;margin:28px 0 10px;letter-spacing:-.01em}
+.list{display:flex;flex-direction:column;gap:10px}
+.empty,.free{color:var(--muted);margin:4px 0;font-size:.95rem}
+
+/* strisce degli impegni: il colore a sinistra identifica la persona */
+.ev{display:flex;align-items:stretch;width:100%;text-align:left;background:var(--surface);border:0;
+  border-radius:14px;padding:0;overflow:hidden;box-shadow:inset 0 0 0 1px var(--line)}
+.ev::before{content:"";width:10px;flex:none;background:var(--c)}
+.ev .t{display:flex;flex-direction:column;justify-content:center;min-width:76px;padding:14px 4px 14px 14px;
+  font-weight:800;font-size:1.3rem;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.ev .t small{font-size:.8rem;font-weight:600;color:var(--muted)}
+.ev .b{display:flex;flex-direction:column;gap:1px;padding:14px 14px 14px 6px;min-width:0}
+.ev .b b{font-size:1.08rem}
+.m{color:var(--muted);font-size:.9rem}
+
+.chips{display:flex;gap:8px;overflow-x:auto;margin:0 -18px 18px;padding:2px 18px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;display:flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:transparent;
+  border-radius:999px;padding:7px 14px;font-weight:600}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--c,var(--muted));display:inline-block}
+
+.wk{display:flex;gap:8px;margin:0 0 6px}
+.btn{border:1.5px solid var(--line);background:transparent;border-radius:12px;padding:11px 16px;font-weight:700}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.danger,.link.danger{color:var(--danger)}
+.btn.sm{padding:8px 12px;font-size:.92rem}
+.link{border:0;background:none;padding:6px;font-weight:600;text-decoration:underline}
+.day{margin:0 0 6px;padding:14px 0 6px;border-top:1.5px solid var(--line)}
+.day h3{margin:0 0 8px;font-size:1.05rem;font-weight:800;display:flex;align-items:baseline;gap:8px}
+.day h3 span{color:var(--muted);font-weight:600}
+.day.today h3::after{content:"oggi";background:var(--accent);color:var(--on-accent);border-radius:999px;padding:1px 10px;font-size:.8rem}
+.day .list{margin-bottom:8px}
+.grp{display:flex;align-items:center;gap:8px;margin:26px 0 10px;font-weight:800;font-size:1.1rem}
+
+.sec{border-top:1.5px solid var(--line);padding:6px 0 22px}
+.note{color:var(--muted);font-size:.9rem;margin:6px 0 12px}
+.prow{display:grid;grid-template-columns:1fr auto;gap:8px 10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.pin{grid-column:1/-1;border:0;background:none;font-weight:800;font-size:1.1rem;padding:2px 0;width:100%;border-bottom:3px solid var(--c)}
+.sw{display:flex;gap:8px}
+.swb{width:28px;height:28px;border-radius:50%;background:var(--c);border:3px solid transparent;padding:0}
+.swb.on{border-color:var(--ink)}
+.addrow{display:flex;gap:8px;margin-top:12px}
+.addrow input{flex:1}
+input:not([type=file]),select{background:var(--surface);border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;font-size:16px;width:100%;min-width:0}
+.fl2{display:flex;flex-direction:column;gap:6px;margin:12px 0;font-weight:600}
+.sec .btn{margin:0 8px 8px 0}
+
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1.5px solid var(--line);
+  display:grid;grid-template-columns:repeat(4,1fr);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));z-index:5}
+nav button{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;
+  color:var(--muted);font-size:.78rem;font-weight:700}
+nav button.on{color:var(--ink)}
+nav svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+nav button.on svg{stroke-width:2.6}
+#fab{position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:58px;height:58px;border-radius:50%;
+  border:0;background:var(--accent);color:var(--on-accent);font-size:2rem;line-height:1;font-weight:500;
+  box-shadow:0 6px 18px rgba(22,33,58,.35);z-index:6}
+
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:520px;max-height:92%;overflow:auto;background:var(--bg);border-radius:22px 22px 0 0;
+  padding:12px 18px calc(22px + env(safe-area-inset-bottom,0px))}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(40px);opacity:.4}}}
+.grab{width:44px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 6px}
+.sheet h2{margin:8px 0 12px}
+.sheet label{display:flex;flex-direction:column;gap:6px;margin:0 0 12px;font-weight:600}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fl{font-weight:600;margin-bottom:6px}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--line);border-radius:12px;padding:3px;margin:0 0 14px}
+.seg button{border:0;background:transparent;border-radius:10px;padding:10px;font-weight:700}
+.seg button.on{background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:14px}
+.dc{border:1.5px solid var(--line);background:transparent;border-radius:10px;padding:10px 0;font-weight:700;font-size:.85rem}
+.dc.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.actions .primary{flex:1}
+
+#toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);
+  color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;z-index:30;max-width:88%;text-align:center}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<button id="fab" data-a="add" aria-label="Nuovo impegno">+</button>
+<nav aria-label="Sezioni">
+  <button data-a="view" data-v="oggi"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Oggi</button>
+  <button data-a="view" data-v="settimana"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Settimana</button>
+  <button data-a="view" data-v="impegni"><svg viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>Impegni</button>
+  <button data-a="view" data-v="impostazioni"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Impostazioni</button>
+</nav>
+<div id="toast" hidden role="status"></div>
+
+<script>
+'use strict';
+/* ---------- dati ---------- */
+const KEY = 'agenda-famiglia-v1';
+const COLORS = ['#F2B705','#0E9AA7','#EF6F6C','#7A5CFA','#3BB273','#F08A24'];
+const DAYS = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
+const DAYS_FULL = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+const ICS_DAYS = ['MO','TU','WE','TH','FR','SA','SU'];
+
+function defaults(){
+  const base = {type:'weekly', date:'', end:'', notes:'', until:'', sample:true};
+  return {
+    persons:[
+      {id:'p1', name:'Figlio 1', color:COLORS[1]},
+      {id:'p2', name:'Figlio 2', color:COLORS[2]},
+      {id:'p4', name:'Figlio 3', color:COLORS[4]},
+      {id:'p3', name:'Moglie',   color:COLORS[3]}
+    ],
+    events:[
+      {...base, id:'e1', title:'Nuoto',    personId:'p1', days:[1,4], start:'17:30', end:'18:30', place:'Piscina'},
+      {...base, id:'e2', title:'Calcio',   personId:'p2', days:[2,5], start:'18:00', end:'19:30', place:'Campo sportivo'},
+      {...base, id:'e4', title:'Basket',   personId:'p4', days:[3,6], start:'16:00', end:'17:30', place:'Palestra'},
+      {...base, id:'e3', title:'Pallavolo',personId:'p3', days:[3],   start:'20:30', end:'22:00', place:'Palestra'}
+    ],
+    settings:{morning:'07:30', before:60}
+  };
+}
+let db;
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw){ const d = JSON.parse(raw); if(d && Array.isArray(d.persons) && Array.isArray(d.events)){ d.settings = d.settings || {morning:'07:30',before:60}; return d; } }
+  }catch(_){}
+  return defaults();
+}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(_){ toast('Impossibile salvare su questo dispositivo'); } }
+db = load();
+
+/* ---------- utilità ---------- */
+const $ = (s,r=document)=>r.querySelector(s);
+const E = s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n=>String(n).padStart(2,'0');
+const iso = d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseISO = s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const addDays = (d,n)=>{const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()+n);return x};
+const dow = d=>((d.getDay()+6)%7)+1; // 1=lunedì … 7=domenica
+const monday = d=>addDays(d,-(dow(d)-1));
+const uid = ()=>'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const fmtLong = d=>d.toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'});
+const fmtShort = d=>d.toLocaleDateString('it-IT',{day:'numeric',month:'short'});
+const personById = id=>db.persons.find(p=>p.id===id)||{name:'?',color:'#8A94A6'};
+function toast(msg){
+  const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast.t);
+  toast.t=setTimeout(()=>t.hidden=true,2600);
+}
+
+/* ---------- logica impegni ---------- */
+function occursOn(ev,d){
+  const s=iso(d);
+  if(ev.type==='once') return ev.date===s;
+  return ev.days.includes(dow(d)) && (!ev.until || s<=ev.until);
+}
+let filter=null;
+function eventsOn(d){
+  return db.events.filter(e=>(!filter||e.personId===filter)&&occursOn(e,d)).sort((a,b)=>a.start.localeCompare(b.start));
+}
+function schedule(ev){
+  if(ev.type==='once') return parseISO(ev.date).toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
+  const d=ev.days.slice().sort((a,b)=>a-b).map(n=>DAYS[n-1]).join(', ');
+  return ev.until ? `${d}, fino al ${parseISO(ev.until).toLocaleDateString('it-IT',{day:'numeric',month:'short',year:'numeric'})}` : d;
+}
+
+/* ---------- viste ---------- */
+let view='oggi', weekOff=0;
+
+function chips(){
+  if(db.persons.length<2) return '';
+  return `<div class="chips" role="group" aria-label="Filtra per persona">
+    <button class="chip ${!filter?'on':''}" data-a="filter" data-id="">Tutti</button>
+    ${db.persons.map(p=>`<button class="chip ${filter===p.id?'on':''}" style="--c:${p.color}" data-a="filter" data-id="${p.id}"><i class="dot"></i>${E(p.name)}</button>`).join('')}
+  </div>`;
+}
+function evCard(ev){
+  const p=personById(ev.personId);
+  return `<button class="ev" style="--c:${p.color}" data-a="edit" data-id="${ev.id}">
+    <span class="t">${E(ev.start)}${ev.end?`<small>${E(ev.end)}</small>`:''}</span>
+    <span class="b"><b>${E(ev.title)}</b><span class="m">${E(p.name)}</span>${ev.place?`<span class="m">${E(ev.place)}</span>`:''}</span>
+  </button>`;
+}
+function evRow(ev){
+  const p=personById(ev.personId);
+  return `<button class="ev" style="--c:${p.color}" data-a="edit" data-id="${ev.id}">
+    <span class="t">${E(ev.start)}</span>
+    <span class="b"><b>${E(ev.title)}</b><span class="m">${E(schedule(ev))}</span>${ev.place?`<span class="m">${E(ev.place)}</span>`:''}</span>
+  </button>`;
+}
+
+function viewOggi(){
+  const t=new Date(), ev=eventsOn(t), tm=eventsOn(addDays(t,1));
+  return `<header class="hd"><h1>${ev.length?'Oggi c’è':'Oggi niente'}</h1><p class="sub">${E(fmtLong(t))}</p></header>
+  ${chips()}
+  <section class="list">${ev.length?ev.map(evCard).join(''):'<p class="empty">Nessun impegno per oggi.</p>'}</section>
+  <h2>Domani</h2>
+  <section class="list">${tm.length?tm.map(evCard).join(''):'<p class="empty">Niente in programma.</p>'}</section>`;
+}
+
+function viewSettimana(){
+  const m=addDays(monday(new Date()),weekOff*7), today=iso(new Date());
+  const days=[...Array(7)].map((_,i)=>addDays(m,i));
+  return `<header class="hd"><h1>Settimana</h1><p class="sub">dal ${E(fmtShort(days[0]))} al ${E(fmtShort(days[6]))}</p></header>
+  ${chips()}
+  <div class="wk">
+    <button class="btn sm" data-a="week" data-v="-1">Precedente</button>
+    ${weekOff!==0?'<button class="btn sm" data-a="week" data-v="0">Questa</button>':''}
+    <button class="btn sm" data-a="week" data-v="1">Successiva</button>
+  </div>
+  ${days.map((d,i)=>{const ev=eventsOn(d);return `<section class="day ${iso(d)===today?'today':''}">
+    <h3>${DAYS_FULL[i]} <span>${d.getDate()}</span></h3>
+    <div class="list">${ev.length?ev.map(evCard).join(''):'<p class="free">Libero</p>'}</div></section>`}).join('')}`;
+}
+
+function viewImpegni(){
+  const persons=db.persons.filter(p=>!filter||p.id===filter);
+  const body=persons.map(p=>{
+    const evs=db.events.filter(e=>e.personId===p.id).sort((a,b)=>a.title.localeCompare(b.title));
+    return `<div class="grp" style="--c:${p.color}"><i class="dot"></i>${E(p.name)}</div>
+      <div class="list">${evs.length?evs.map(evRow).join(''):'<p class="empty">Nessun impegno. Tocca + per aggiungerne uno.</p>'}</div>`;
+  }).join('');
+  return `<header class="hd"><h1>Impegni</h1><p class="sub">Tutto quello che si ripete</p></header>${chips()}${body||'<p class="empty">Aggiungi prima una persona in Impostazioni.</p>'}`;
+}
+
+function viewImpostazioni(){
+  const s=db.settings, hasSample=db.events.some(e=>e.sample);
+  return `<header class="hd"><h1>Impostazioni</h1></header>
+  <section class="sec"><h2>Persone</h2>
+    ${db.persons.map(p=>`<div class="prow" style="--c:${p.color}">
+      <input class="pin" data-a="pname" data-id="${p.id}" value="${E(p.name)}" aria-label="Nome">
+      <div class="sw">${COLORS.map(c=>`<button class="swb ${c===p.color?'on':''}" style="--c:${c}" data-a="pcolor" data-id="${p.id}" data-v="${c}" aria-label="Colore"></button>`).join('')}</div>
+      <button class="link danger" data-a="pdel" data-id="${p.id}">Rimuovi</button></div>`).join('')}
+    <div class="addrow"><input id="new-person" placeholder="Nuova persona" maxlength="40"><button class="btn" data-a="padd">Aggiungi</button></div>
+  </section>
+  <section class="sec"><h2>Avvisi</h2>
+    <label class="fl2">Avviso del mattino (“Oggi c’è…”) alle<input type="time" data-a="morning" value="${E(s.morning)}"></label>
+    <label class="fl2">Avviso prima dell’impegno<select data-a="before">${[[0,'Nessuno'],[30,'30 minuti prima'],[60,'1 ora prima'],[120,'2 ore prima']].map(([v,l])=>`<option value="${v}" ${s.before===v?'selected':''}>${l}</option>`).join('')}</select></label>
+    <p class="note">Gli avvisi vengono scritti dentro gli eventi del Calendario. Se cambi orari o impegni, aggiungi di nuovo il file al Calendario: gli eventi hanno un identificativo fisso, quindi di solito si aggiornano senza duplicarsi.</p>
+  </section>
+  <section class="sec"><h2>Calendario di iPhone</h2>
+    <p class="note">Crea eventi che si ripetono ogni settimana, con gli avvisi scelti sopra. Aprilo da Safari e, quando compare il file, tocca “Aggiungi tutto”.</p>
+    <button class="btn primary" data-a="ics-share">Aggiungi al Calendario</button>
+    <button class="btn" data-a="ics-dl">Scarica il file .ics</button>
+  </section>
+  <section class="sec"><h2>Dati</h2>
+    <p class="note">Gli impegni sono salvati solo su questo dispositivo. Fai un backup ogni tanto.</p>
+    <button class="btn" data-a="backup">Salva backup</button>
+    <button class="btn" data-a="restore">Ripristina backup</button>
+    <input type="file" accept="application/json,.json" data-a="file" hidden>
+    ${hasSample?'<button class="btn" data-a="clear-sample">Cancella gli impegni di esempio</button>':''}
+  </section>`;
+}
+
+function render(){
+  const f={oggi:viewOggi,settimana:viewSettimana,impegni:viewImpegni,impostazioni:viewImpostazioni}[view];
+  $('#app').innerHTML=f();
+  $('#fab').hidden=(view==='impostazioni');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
+}
+
+/* ---------- scheda impegno ---------- */
+let draft=null;
+function openSheet(id){
+  if(!db.persons.length){ toast('Aggiungi prima una persona in Impostazioni'); return; }
+  const ev=id?db.events.find(e=>e.id===id):null;
+  draft=ev?{...ev,days:[...ev.days]}:{id:null,title:'',personId:filter||db.persons[0].id,type:'weekly',days:[],date:iso(new Date()),start:'17:00',end:'',place:'',notes:'',until:''};
+  const el=document.createElement('div');
+  el.className='scrim'; el.id='scrim'; el.dataset.a='closeSheet';
+  el.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="${ev?'Modifica impegno':'Nuovo impegno'}">
+    <div class="grab"></div>
+    <h2>${ev?'Modifica impegno':'Nuovo impegno'}</h2>
+    <label>Cosa<input id="f-title" placeholder="Es. Nuoto" maxlength="80"></label>
+    <label>Chi<select id="f-person">${db.persons.map(p=>`<option value="${p.id}">${E(p.name)}</option>`).join('')}</select></label>
+    <div class="seg" role="group" aria-label="Ripetizione">
+      <button data-a="type" data-v="weekly">Ogni settimana</button>
+      <button data-a="type" data-v="once">Una volta</button>
+    </div>
+    <div id="blk-weekly"><div class="fl">Giorni</div>
+      <div class="days">${DAYS.map((d,i)=>`<button class="dc" data-a="day" data-v="${i+1}">${d}</button>`).join('')}</div></div>
+    <div id="blk-once"><label>Data<input type="date" id="f-date"></label></div>
+    <div class="row2"><label>Inizio<input type="time" id="f-start"></label><label>Fine (facoltativo)<input type="time" id="f-end"></label></div>
+    <label>Luogo (facoltativo)<input id="f-place" maxlength="80"></label>
+    <label>Note (facoltativo)<input id="f-notes" maxlength="200"></label>
+    <div id="blk-until"><label>Ripeti fino al (facoltativo)<input type="date" id="f-until"></label></div>
+    <div class="actions">
+      <button class="btn primary" data-a="save">Salva</button>
+      <button class="btn" data-a="closeSheet">Annulla</button>
+      ${ev?'<button class="btn danger" data-a="del">Elimina</button>':''}
+    </div></div>`;
+  document.body.appendChild(el);
+  $('#f-title').value=draft.title; $('#f-person').value=draft.personId; $('#f-date').value=draft.date||iso(new Date());
+  $('#f-start').value=draft.start; $('#f-end').value=draft.end; $('#f-place').value=draft.place; $('#f-notes').value=draft.notes; $('#f-until').value=draft.until;
+  syncSheet();
+  if(!ev) setTimeout(()=>$('#f-title').focus(),50);
+}
+function syncSheet(){
+  document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===draft.type));
+  document.querySelectorAll('.dc').forEach(b=>b.classList.toggle('on',draft.days.includes(+b.dataset.v)));
+  $('#blk-weekly').hidden=draft.type!=='weekly'; $('#blk-until').hidden=draft.type!=='weekly'; $('#blk-once').hidden=draft.type!=='once';
+}
+function closeSheet(){ const s=$('#scrim'); if(s) s.remove(); draft=null; }
+function saveSheet(){
+  const title=$('#f-title').value.trim(), start=$('#f-start').value, end=$('#f-end').value, date=$('#f-date').value;
+  if(!title) return toast('Scrivi cosa c’è');
+  if(!start) return toast('Scegli l’orario di inizio');
+  if(draft.type==='weekly' && !draft.days.length) return toast('Scegli almeno un giorno');
+  if(draft.type==='once' && !date) return toast('Scegli la data');
+  const obj={id:draft.id||uid(),title,personId:$('#f-person').value,type:draft.type,days:draft.type==='weekly'?draft.days.slice().sort((a,b)=>a-b):[],
+    date:draft.type==='once'?date:'',start,end,place:$('#f-place').value.trim(),notes:$('#f-notes').value.trim(),
+    until:draft.type==='weekly'?$('#f-until').value:'',sample:false};
+  const i=db.events.findIndex(e=>e.id===obj.id);
+  if(i>=0) db.events[i]=obj; else db.events.push(obj);
+  save(); closeSheet(); render(); toast('Salvato');
+}
+
+/* ---------- calendario (.ics) ---------- */
+const icsEsc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
+const fold=l=>{const o=[];while(l.length>60){o.push(l.slice(0,60));l=' '+l.slice(60)}o.push(l);return o.join('\r\n')};
+const toMin=t=>{const [h,m]=t.split(':').map(Number);return h*60+m};
+const icsDT=(d,min)=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(Math.floor(min/60))}${pad(min%60)}00`;
+
+function firstDate(ev){
+  if(ev.type==='once') return parseISO(ev.date);
+  const t=new Date();
+  for(let i=0;i<8;i++){const d=addDays(t,i);if(ev.days.includes(dow(d)))return d;}
+  return t;
+}
+function buildICS(){
+  const n=new Date(), stamp=`${n.getUTCFullYear()}${pad(n.getUTCMonth()+1)}${pad(n.getUTCDate())}T${pad(n.getUTCHours())}${pad(n.getUTCMinutes())}${pad(n.getUTCSeconds())}Z`;
+  const morning=toMin(db.settings.morning||'07:30'), before=+db.settings.before||0;
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Fwd Studio//Agenda famiglia//IT','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:Agenda famiglia'];
+  let count=0;
+  db.events.forEach(ev=>{
+    if(ev.type==='weekly' && ev.until && ev.until<iso(n)) return;
+    const p=personById(ev.personId), d=firstDate(ev), s=toMin(ev.start);
+    let e=ev.end&&toMin(ev.end)>s?toMin(ev.end):Math.min(s+60,1439);
+    const label=`${ev.title} (${p.name})`;
+    L.push('BEGIN:VEVENT',`UID:${ev.id}@agenda-famiglia.fwdstudio`,`DTSTAMP:${stamp}`,
+      `DTSTART:${icsDT(d,s)}`,`DTEND:${icsDT(d,e)}`,`SUMMARY:${icsEsc(label)}`);
+    if(ev.place) L.push(`LOCATION:${icsEsc(ev.place)}`);
+    if(ev.notes) L.push(`DESCRIPTION:${icsEsc(ev.notes)}`);
+    if(ev.type==='weekly'){
+      let r=`RRULE:FREQ=WEEKLY;BYDAY=${ev.days.slice().sort((a,b)=>a-b).map(x=>ICS_DAYS[x-1]).join(',')}`;
+      if(ev.until) r+=`;UNTIL=${ev.until.replace(/-/g,'')}T235959`;
+      L.push(r);
+    }
+    const mins=s-morning;
+    if(mins>0 && mins!==before){
+      L.push('BEGIN:VALARM','ACTION:DISPLAY',`DESCRIPTION:${icsEsc(`Oggi c'è: ${label} alle ${ev.start}${ev.place?', '+ev.place:''}`)}`,`TRIGGER:-PT${mins}M`,'END:VALARM');
+    }
+    if(before>0){
+      L.push('BEGIN:VALARM','ACTION:DISPLAY',`DESCRIPTION:${icsEsc(`Tra poco: ${label} alle ${ev.start}`)}`,`TRIGGER:-PT${before}M`,'END:VALARM');
+    }
+    L.push('END:VEVENT'); count++;
+  });
+  L.push('END:VCALENDAR');
+  return {text:L.map(fold).join('\r\n')+'\r\n',count};
+}
+async function exportICS(share){
+  const {text,count}=buildICS();
+  if(!count) return toast('Non ci sono impegni da esportare');
+  const name='agenda-famiglia.ics';
+  const blob=new Blob([text],{type:'text/calendar;charset=utf-8'});
+  if(share && navigator.canShare){
+    try{
+      const file=new File([blob],name,{type:'text/calendar'});
+      if(navigator.canShare({files:[file]})){ await navigator.share({files:[file],title:'Agenda famiglia'}); return; }
+    }catch(e){ if(e&&e.name==='AbortError') return; }
+  }
+  downloadBlob(blob,name);
+  toast('File pronto: aprilo e tocca “Aggiungi tutto”');
+}
+function downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),15000);
+}
+
+/* ---------- backup ---------- */
+function importBackup(f){
+  if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(!Array.isArray(d.persons)||!Array.isArray(d.events)) throw new Error('formato');
+      const hhmm=/^\d{2}:\d{2}$/, ymd=/^\d{4}-\d{2}-\d{2}$/;
+      const persons=d.persons.map(p=>({id:String(p.id),name:String(p.name||'').slice(0,40),color:/^#[0-9a-f]{6}$/i.test(p.color)?p.color:COLORS[0]}));
+      const events=d.events.map(e=>({id:String(e.id),title:String(e.title||'').slice(0,80),personId:String(e.personId),
+        type:e.type==='once'?'once':'weekly',days:(Array.isArray(e.days)?e.days:[]).map(Number).filter(n=>n>=1&&n<=7),
+        date:ymd.test(e.date)?e.date:'',start:hhmm.test(e.start)?e.start:'17:00',end:hhmm.test(e.end)?e.end:'',
+        place:String(e.place||'').slice(0,80),notes:String(e.notes||'').slice(0,200),until:ymd.test(e.until)?e.until:'',sample:!!e.sample}));
+      if(!confirm('Sostituire i dati attuali con il backup?')) return;
+      const st=d.settings||{};
+      db={persons,events,settings:{morning:hhmm.test(st.morning)?st.morning:'07:30',before:[0,30,60,120].includes(+st.before)?+st.before:60}};
+      filter=null; save(); render(); toast('Backup ripristinato');
+    }catch(_){ toast('File non valido'); }
+  };
+  r.readAsText(f);
+}
+
+/* ---------- eventi ---------- */
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-a]'); if(!el) return;
+  const a=el.dataset.a, id=el.dataset.id, v=el.dataset.v;
+  switch(a){
+    case 'view': view=v; weekOff=0; render(); window.scrollTo(0,0); break;
+    case 'filter': filter=id||null; render(); break;
+    case 'edit': openSheet(id); break;
+    case 'add': openSheet(null); break;
+    case 'week': weekOff=v==='0'?0:weekOff+Number(v); render(); break;
+    case 'closeSheet': if(e.target===el) closeSheet(); break;
+    case 'type': draft.type=v; syncSheet(); break;
+    case 'day': { const n=Number(v), i=draft.days.indexOf(n); if(i>=0) draft.days.splice(i,1); else draft.days.push(n); syncSheet(); break; }
+    case 'save': saveSheet(); break;
+    case 'del': if(confirm('Eliminare questo impegno?')){ db.events=db.events.filter(x=>x.id!==draft.id); save(); closeSheet(); render(); toast('Eliminato'); } break;
+    case 'pcolor': { const p=db.persons.find(x=>x.id===id); if(p){p.color=v; save(); render();} break; }
+    case 'pdel': {
+      const p=db.persons.find(x=>x.id===id); if(!p) break;
+      const n=db.events.filter(x=>x.personId===id).length;
+      if(confirm(n?`Rimuovere ${p.name} e i suoi ${n} impegni?`:`Rimuovere ${p.name}?`)){
+        db.persons=db.persons.filter(x=>x.id!==id); db.events=db.events.filter(x=>x.personId!==id);
+        if(filter===id) filter=null; save(); render();
+      } break; }
+    case 'padd': {
+      const inp=$('#new-person'), n=inp.value.trim(); if(!n) return toast('Scrivi un nome');
+      db.persons.push({id:'p'+Date.now().toString(36),name:n,color:COLORS[db.persons.length%COLORS.length]}); save(); render(); break; }
+    case 'ics-share': exportICS(true); break;
+    case 'ics-dl': exportICS(false); break;
+    case 'backup': downloadBlob(new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),'agenda-famiglia-backup.json'); break;
+    case 'restore': $('input[data-a="file"]').click(); break;
+    case 'clear-sample': if(confirm('Cancellare gli impegni di esempio?')){ db.events=db.events.filter(x=>!x.sample); save(); render(); } break;
+  }
+});
+document.addEventListener('change',e=>{
+  const el=e.target, a=el.dataset.a; if(!a) return;
+  if(a==='pname'){ const p=db.persons.find(x=>x.id===el.dataset.id), n=el.value.trim(); if(p&&n){p.name=n;save();toast('Nome aggiornato');} else render(); }
+  else if(a==='morning'){ db.settings.morning=el.value||'07:30'; save(); toast('Orario salvato'); }
+  else if(a==='before'){ db.settings.before=Number(el.value); save(); toast('Salvato'); }
+  else if(a==='file'){ importBackup(el.files[0]); el.value=''; }
+});
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSheet(); });
+
+/* ---------- icona e manifest (best effort) ---------- */
+(function(){
+  try{
+    const c=document.createElement('canvas'); c.width=c.height=180; const x=c.getContext('2d');
+    x.fillStyle='#16213A'; x.fillRect(0,0,180,180);
+    ['#F2B705','#0E9AA7','#EF6F6C'].forEach((col,i)=>{x.fillStyle=col;x.beginPath();x.arc(48+i*42,60,16,0,Math.PI*2);x.fill();});
+    x.fillStyle='#fff'; x.font='800 60px ui-rounded,system-ui,sans-serif'; x.textAlign='center'; x.fillText('Oggi',90,142);
+    const png=c.toDataURL('image/png');
+    const l=document.createElement('link'); l.rel='apple-touch-icon'; l.href=png; document.head.appendChild(l);
+    const m={name:'Agenda famiglia',short_name:'Famiglia',display:'standalone',background_color:'#F4F6F1',theme_color:'#16213A',
+      start_url:location.href.split('#')[0],icons:[{src:png,sizes:'180x180',type:'image/png'}]};
+    const ml=document.createElement('link'); ml.rel='manifest';
+    ml.href=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/manifest+json'})); document.head.appendChild(ml);
+  }catch(_){}
+})();
+
+render();
+</script>
+</body>
+</html>
