@@ -73,7 +73,14 @@ h2{font-size:1.15rem;font-weight:800;margin:28px 0 10px;letter-spacing:-.01em}
 .note{color:var(--muted);font-size:.9rem;margin:6px 0 12px}
 .prow{display:grid;grid-template-columns:1fr auto;gap:8px 10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .pin{grid-column:1/-1;border:0;background:none;font-weight:800;font-size:1.1rem;padding:2px 0;width:100%;border-bottom:3px solid var(--c)}
+.pflag{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-weight:600;font-size:.92rem;color:var(--muted)}
+.pflag input{width:17px;height:17px;accent-color:var(--ink);margin:0}
 .sw{display:flex;gap:8px}
+.warn{display:flex;gap:10px;align-items:flex-start;background:color-mix(in srgb, var(--danger) 14%, var(--surface));
+  border:1.5px solid var(--danger);border-radius:14px;padding:12px 14px;margin:0 0 12px;color:var(--ink)}
+.warn b{display:block}
+.warn .m{color:var(--ink);opacity:.75}
+.warn span.ic{font-size:1.2rem;line-height:1}
 .swb{width:28px;height:28px;border-radius:50%;background:var(--c);border:3px solid transparent;padding:0}
 .swb.on{border-color:var(--ink)}
 .addrow{display:flex;gap:8px;margin-top:12px}
@@ -139,10 +146,11 @@ function defaults(){
   const base = {type:'weekly', date:'', end:'', notes:'', until:'', sample:true};
   return {
     persons:[
-      {id:'p1', name:'Figlio 1', color:COLORS[1]},
-      {id:'p2', name:'Figlio 2', color:COLORS[2]},
-      {id:'p4', name:'Figlio 3', color:COLORS[4]},
-      {id:'p3', name:'Moglie',   color:COLORS[3]}
+      {id:'p1', name:'Figlio 1', color:COLORS[1], parent:false},
+      {id:'p2', name:'Figlio 2', color:COLORS[2], parent:false},
+      {id:'p4', name:'Figlio 3', color:COLORS[4], parent:false},
+      {id:'p3', name:'Moglie',   color:COLORS[3], parent:true},
+      {id:'p5', name:'Papà',     color:COLORS[5], parent:true}
     ],
     events:[
       {...base, id:'e1', title:'Nuoto',    personId:'p1', days:[1,4], start:'17:30', end:'18:30', place:'Piscina'},
@@ -157,7 +165,11 @@ let db;
 function load(){
   try{
     const raw = localStorage.getItem(KEY);
-    if(raw){ const d = JSON.parse(raw); if(d && Array.isArray(d.persons) && Array.isArray(d.events)){ d.settings = d.settings || {morning:'07:30',before:60}; return d; } }
+    if(raw){ const d = JSON.parse(raw); if(d && Array.isArray(d.persons) && Array.isArray(d.events)){
+      d.settings = d.settings || {morning:'07:30',before:60};
+      d.persons.forEach(p=>{ if(typeof p.parent!=='boolean') p.parent=false; });
+      return d;
+    } }
   }catch(_){}
   return defaults();
 }
@@ -198,6 +210,28 @@ function schedule(ev){
   return ev.until ? `${d}, fino al ${parseISO(ev.until).toLocaleDateString('it-IT',{day:'numeric',month:'short',year:'numeric'})}` : d;
 }
 
+/* ---------- sovrapposizioni tra genitori ---------- */
+function evRange(ev){ const s=toMin(ev.start); const e=ev.end?toMin(ev.end):Math.min(s+60,1439); return [s,e]; }
+function overlapRange(a,b){ return a[0]<b[1] && b[0]<a[1]; }
+function fmtRange(ev){ return ev.end?`${ev.start}–${ev.end}`:`${ev.start}`; }
+function conflictsOn(d){
+  const parents=db.persons.filter(p=>p.parent);
+  if(parents.length<2) return [];
+  const byP=parents.map(p=>({p,evs:db.events.filter(e=>e.personId===p.id&&occursOn(e,d))}));
+  const out=[];
+  for(let i=0;i<byP.length;i++) for(let j=i+1;j<byP.length;j++)
+    byP[i].evs.forEach(ea=>byP[j].evs.forEach(eb=>{ if(overlapRange(evRange(ea),evRange(eb))) out.push({pa:byP[i].p,pb:byP[j].p,ea,eb}); }));
+  return out;
+}
+function warnBlock(d){
+  const c=conflictsOn(d);
+  if(!c.length) return '';
+  return c.map(x=>`<div class="warn"><span class="ic">⚠️</span><div>
+    <b>${E(x.pa.name)} e ${E(x.pb.name)} impegnati insieme</b>
+    <span class="m">${E(x.ea.title)} (${E(x.pa.name)}) ${E(fmtRange(x.ea))} · ${E(x.eb.title)} (${E(x.pb.name)}) ${E(fmtRange(x.eb))}</span>
+  </div></div>`).join('');
+}
+
 /* ---------- viste ---------- */
 let view='oggi', weekOff=0;
 
@@ -226,6 +260,7 @@ function evRow(ev){
 function viewOggi(){
   const t=new Date(), ev=eventsOn(t), tm=eventsOn(addDays(t,1));
   return `<header class="hd"><h1>${ev.length?'Oggi c’è':'Oggi niente'}</h1><p class="sub">${E(fmtLong(t))}</p></header>
+  ${warnBlock(t)}
   ${chips()}
   <section class="list">${ev.length?ev.map(evCard).join(''):'<p class="empty">Nessun impegno per oggi.</p>'}</section>
   <h2>Domani</h2>
@@ -244,6 +279,7 @@ function viewSettimana(){
   </div>
   ${days.map((d,i)=>{const ev=eventsOn(d);return `<section class="day ${iso(d)===today?'today':''}">
     <h3>${DAYS_FULL[i]} <span>${d.getDate()}</span></h3>
+    ${warnBlock(d)}
     <div class="list">${ev.length?ev.map(evCard).join(''):'<p class="free">Libero</p>'}</div></section>`}).join('')}`;
 }
 
@@ -264,8 +300,10 @@ function viewImpostazioni(){
     ${db.persons.map(p=>`<div class="prow" style="--c:${p.color}">
       <input class="pin" data-a="pname" data-id="${p.id}" value="${E(p.name)}" aria-label="Nome">
       <div class="sw">${COLORS.map(c=>`<button class="swb ${c===p.color?'on':''}" style="--c:${c}" data-a="pcolor" data-id="${p.id}" data-v="${c}" aria-label="Colore"></button>`).join('')}</div>
+      <label class="pflag"><input type="checkbox" data-a="pparent" data-id="${p.id}" ${p.parent?'checked':''}> Genitore</label>
       <button class="link danger" data-a="pdel" data-id="${p.id}">Rimuovi</button></div>`).join('')}
     <div class="addrow"><input id="new-person" placeholder="Nuova persona" maxlength="40"><button class="btn" data-a="padd">Aggiungi</button></div>
+    <p class="note">Segna come “Genitore” le due persone (o più) da controllare: se hanno impegni sovrapposti nello stesso orario, comparirà un avviso in Oggi e Settimana.</p>
   </section>
   <section class="sec"><h2>Avvisi</h2>
     <label class="fl2">Avviso del mattino (“Oggi c’è…”) alle<input type="time" data-a="morning" value="${E(s.morning)}"></label>
@@ -420,7 +458,7 @@ function importBackup(f){
       const d=JSON.parse(r.result);
       if(!Array.isArray(d.persons)||!Array.isArray(d.events)) throw new Error('formato');
       const hhmm=/^\d{2}:\d{2}$/, ymd=/^\d{4}-\d{2}-\d{2}$/;
-      const persons=d.persons.map(p=>({id:String(p.id),name:String(p.name||'').slice(0,40),color:/^#[0-9a-f]{6}$/i.test(p.color)?p.color:COLORS[0]}));
+      const persons=d.persons.map(p=>({id:String(p.id),name:String(p.name||'').slice(0,40),color:/^#[0-9a-f]{6}$/i.test(p.color)?p.color:COLORS[0],parent:!!p.parent}));
       const events=d.events.map(e=>({id:String(e.id),title:String(e.title||'').slice(0,80),personId:String(e.personId),
         type:e.type==='once'?'once':'weekly',days:(Array.isArray(e.days)?e.days:[]).map(Number).filter(n=>n>=1&&n<=7),
         date:ymd.test(e.date)?e.date:'',start:hhmm.test(e.start)?e.start:'17:00',end:hhmm.test(e.end)?e.end:'',
@@ -459,7 +497,7 @@ document.addEventListener('click',e=>{
       } break; }
     case 'padd': {
       const inp=$('#new-person'), n=inp.value.trim(); if(!n) return toast('Scrivi un nome');
-      db.persons.push({id:'p'+Date.now().toString(36),name:n,color:COLORS[db.persons.length%COLORS.length]}); save(); render(); break; }
+      db.persons.push({id:'p'+Date.now().toString(36),name:n,color:COLORS[db.persons.length%COLORS.length],parent:false}); save(); render(); break; }
     case 'ics-share': exportICS(true); break;
     case 'ics-dl': exportICS(false); break;
     case 'backup': downloadBlob(new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),'agenda-famiglia-backup.json'); break;
@@ -473,6 +511,7 @@ document.addEventListener('change',e=>{
   else if(a==='morning'){ db.settings.morning=el.value||'07:30'; save(); toast('Orario salvato'); }
   else if(a==='before'){ db.settings.before=Number(el.value); save(); toast('Salvato'); }
   else if(a==='file'){ importBackup(el.files[0]); el.value=''; }
+  else if(a==='pparent'){ const p=db.persons.find(x=>x.id===el.dataset.id); if(p){ p.parent=el.checked; save(); render(); } }
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSheet(); });
 
