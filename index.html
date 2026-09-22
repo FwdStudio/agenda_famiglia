@@ -133,6 +133,9 @@ nav button.on svg{stroke-width:2.6}
 </nav>
 <div id="toast" hidden role="status"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 'use strict';
 /* ---------- dati ---------- */
@@ -141,6 +144,55 @@ const COLORS = ['#F2B705','#0E9AA7','#EF6F6C','#7A5CFA','#3BB273','#F08A24'];
 const DAYS = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
 const DAYS_FULL = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
 const ICS_DAYS = ['MO','TU','WE','TH','FR','SA','SU'];
+
+/* ---------- Firebase (sincronizzazione tra i telefoni della famiglia) ---------- */
+// Incolla qui la configurazione del TUO progetto Firebase (Impostazioni progetto → App web).
+// Finché resta con "INCOLLA_QUI" l'app funziona come prima, solo in locale, senza contattare nessun server.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCypGR2aYaSvpKsxZ3MBmVqJPCXbnE9_Uw",
+  authDomain: "agenda-famiglia-e54fa.firebaseapp.com",
+  projectId: "agenda-famiglia-e54fa",
+  storageBucket: "agenda-famiglia-e54fa.firebasestorage.app",
+  messagingSenderId: "735245490455",
+  appId: "1:735245490455:web:b53a7066ba25543bc53f52"
+};
+const CODE_KEY = 'agenda-famiglia-code';
+let familyCode = (localStorage.getItem(CODE_KEY) || '').trim();
+let fbDb = null, fbAuth = null, fbUnsub = null;
+
+function fbConfigured(){ return !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('INCOLLA')===-1); }
+function fbDocRef(){ return fbDb.collection('families').doc(familyCode); }
+
+function fbInit(){
+  if(!fbConfigured() || fbDb) return;
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    fbAuth = firebase.auth();
+    fbDb = firebase.firestore();
+    try{ fbDb.enablePersistence({synchronizeTabs:true}).catch(()=>{}); }catch(_){}
+    fbAuth.onAuthStateChanged(u=>{ if(u && familyCode) fbListen(); });
+    fbAuth.signInAnonymously().catch(()=>toast('Connessione al cloud non riuscita: continuo solo in locale'));
+  }catch(_){ toast('Configurazione Firebase non valida'); }
+}
+function fbListen(){
+  if(!fbDb || !familyCode) return;
+  if(fbUnsub){ fbUnsub(); fbUnsub=null; }
+  fbUnsub = fbDocRef().onSnapshot(snap=>{
+    if(!snap.exists){ fbPush(); return; } // primo telefono con questo codice: carica i dati locali sul cloud
+    const data = snap.data();
+    if(data && Array.isArray(data.persons) && Array.isArray(data.events)){
+      db = {persons:data.persons, events:data.events, settings:data.settings || db.settings};
+      db.persons.forEach(p=>{ if(typeof p.parent!=='boolean') p.parent=false; });
+      try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(_){}
+      render();
+    }
+  }, ()=>toast('Sincronizzazione interrotta, continuo offline'));
+}
+function fbPush(){
+  if(!fbDb || !familyCode) return;
+  fbDocRef().set({persons:db.persons, events:db.events, settings:db.settings, updatedAt:Date.now()})
+    .catch(()=>toast('Non sincronizzato: controlla la connessione'));
+}
 
 function defaults(){
   const base = {type:'weekly', date:'', end:'', notes:'', until:'', sample:true};
@@ -173,7 +225,10 @@ function load(){
   }catch(_){}
   return defaults();
 }
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(_){ toast('Impossibile salvare su questo dispositivo'); } }
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(_){ toast('Impossibile salvare su questo dispositivo'); }
+  if(fbConfigured() && familyCode) fbPush();
+}
 db = load();
 
 /* ---------- utilità ---------- */
@@ -305,6 +360,10 @@ function viewImpostazioni(){
     <div class="addrow"><input id="new-person" placeholder="Nuova persona" maxlength="40"><button class="btn" data-a="padd">Aggiungi</button></div>
     <p class="note">Segna come “Genitore” le due persone (o più) da controllare: se hanno impegni sovrapposti nello stesso orario, comparirà un avviso in Oggi e Settimana.</p>
   </section>
+  ${fbConfigured()?`<section class="sec"><h2>Sincronizzazione famiglia</h2>
+    <p class="note">Codice attuale: <b>${familyCode?E(familyCode):'nessuno impostato'}</b>${fbDb?(familyCode?' · connesso':''):' · non collegato'}. Usa lo stesso codice su tutti i telefoni: gli impegni restano sempre allineati tra chi lo usa.</p>
+    <button class="btn" data-a="fbcode">${familyCode?'Cambia codice famiglia':'Imposta codice famiglia'}</button>
+  </section>`:''}
   <section class="sec"><h2>Avvisi</h2>
     <label class="fl2">Avviso del mattino (“Oggi c’è…”) alle<input type="time" data-a="morning" value="${E(s.morning)}"></label>
     <label class="fl2">Avviso prima dell’impegno<select data-a="before">${[[0,'Nessuno'],[30,'30 minuti prima'],[60,'1 ora prima'],[120,'2 ore prima']].map(([v,l])=>`<option value="${v}" ${s.before===v?'selected':''}>${l}</option>`).join('')}</select></label>
@@ -372,6 +431,32 @@ function syncSheet(){
   $('#blk-weekly').hidden=draft.type!=='weekly'; $('#blk-until').hidden=draft.type!=='weekly'; $('#blk-once').hidden=draft.type!=='once';
 }
 function closeSheet(){ const s=$('#scrim'); if(s) s.remove(); draft=null; }
+
+/* ---------- scheda codice famiglia ---------- */
+function openCodeSheet(){
+  const el=document.createElement('div');
+  el.className='scrim'; el.id='scrim-code'; el.dataset.a='closeCode';
+  el.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="Codice famiglia">
+    <div class="grab"></div>
+    <h2>Codice famiglia</h2>
+    <p class="note">Scegli una parola o un PIN e usa esattamente lo stesso su tutti i telefoni: è quello che collega i vostri dati.</p>
+    <label>Codice<input id="f-code" maxlength="40" autocapitalize="off" autocorrect="off" placeholder="Es. caponago2026"></label>
+    <div class="actions">
+      <button class="btn primary" data-a="save-code">Conferma</button>
+      ${familyCode?'<button class="btn" data-a="closeCode">Annulla</button>':''}
+    </div></div>`;
+  document.body.appendChild(el);
+  $('#f-code').value=familyCode;
+  setTimeout(()=>$('#f-code').focus(),50);
+}
+function closeCode(){ const s=$('#scrim-code'); if(s) s.remove(); }
+function saveCode(){
+  const v=$('#f-code').value.trim().toLowerCase().replace(/\s+/g,'-');
+  if(!v) return toast('Scrivi un codice');
+  familyCode=v; try{ localStorage.setItem(CODE_KEY, familyCode); }catch(_){}
+  closeCode(); fbInit(); if(fbAuth && fbAuth.currentUser) fbListen();
+  toast('Codice salvato'); render();
+}
 function saveSheet(){
   const title=$('#f-title').value.trim(), start=$('#f-start').value, end=$('#f-end').value, date=$('#f-date').value;
   if(!title) return toast('Scrivi cosa c’è');
@@ -503,6 +588,9 @@ document.addEventListener('click',e=>{
     case 'backup': downloadBlob(new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),'agenda-famiglia-backup.json'); break;
     case 'restore': $('input[data-a="file"]').click(); break;
     case 'clear-sample': if(confirm('Cancellare gli impegni di esempio?')){ db.events=db.events.filter(x=>!x.sample); save(); render(); } break;
+    case 'fbcode': openCodeSheet(); break;
+    case 'save-code': saveCode(); break;
+    case 'closeCode': if(e.target===el) closeCode(); break;
   }
 });
 document.addEventListener('change',e=>{
@@ -520,6 +608,11 @@ if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   });
+}
+
+if(fbConfigured()){
+  fbInit();
+  if(familyCode) fbListen(); else setTimeout(openCodeSheet, 400);
 }
 
 render();
